@@ -24,7 +24,6 @@
 #define MUPDF_FITZ_STRUCTURED_TEXT_H
 
 #include "mupdf/fitz/system.h"
-#include "mupdf/fitz/types.h"
 #include "mupdf/fitz/context.h"
 #include "mupdf/fitz/geometry.h"
 #include "mupdf/fitz/font.h"
@@ -51,7 +50,7 @@ typedef struct fz_layout_line
 	struct fz_layout_line *next;
 } fz_layout_line;
 
-typedef struct
+typedef struct fz_layout_block
 {
 	fz_pool *pool;
 	fz_matrix matrix;
@@ -191,7 +190,7 @@ typedef struct fz_stext_grid_positions fz_stext_grid_positions;
 	FZ_STEXT_USE_GID_FOR_UNKNOWN_UNICODE will give undefined behaviour.
 
 */
-enum
+enum fz_stext_option_flags
 {
 	FZ_STEXT_PRESERVE_LIGATURES = 1,
 	FZ_STEXT_PRESERVE_WHITESPACE = 2,
@@ -325,7 +324,7 @@ enum
  *	the logical data, a caller now has to do a depth-first traversal.
  */
 
-typedef struct
+typedef struct fz_stext_page_details
 {
 	fz_rect mediabox;
 	int chapter;
@@ -340,7 +339,7 @@ typedef struct
 	should really be fz_stext_document, cos it can contain
 	content from multiple pages.
 */
-typedef struct
+typedef struct fz_stext_page
 {
 	int refs;
 	fz_pool *pool;
@@ -368,7 +367,7 @@ fz_stext_page *fz_keep_stext_page(fz_context *ctx, fz_stext_page *page);
 */
 fz_stext_page_details *fz_stext_page_details_for_block(fz_context *ctx, fz_stext_page *page, fz_stext_block *block);
 
-enum
+enum fz_stext_block_type
 {
 	FZ_STEXT_BLOCK_TEXT = 0,
 	FZ_STEXT_BLOCK_IMAGE = 1,
@@ -377,7 +376,7 @@ enum
 	FZ_STEXT_BLOCK_GRID = 4
 };
 
-enum
+enum fz_stext_justify_flags
 {
 	FZ_STEXT_TEXT_JUSTIFY_UNKNOWN = 0,
 	FZ_STEXT_TEXT_JUSTIFY_LEFT = 1,
@@ -386,7 +385,7 @@ enum
 	FZ_STEXT_TEXT_JUSTIFY_FULL = 4,
 };
 
-enum
+enum fz_stext_vector_flags
 {
 	/* Indicates that this vector came from a stroked
 	 * path. */
@@ -399,10 +398,16 @@ enum
 	/* Indicates that this vector came from a path
 	 * segment, and more segments from this same path are
 	 * still to come. */
-	FZ_STEXT_VECTOR_CONTINUES = 4
+	FZ_STEXT_VECTOR_CONTINUES = 4,
+
+	/* Indicates that this was detected as being
+	 * part of an underline/strikeout/highlight. */
+	FZ_STEXT_VECTOR_IS_HIGHLIGHT = 8,
+	FZ_STEXT_VECTOR_IS_UNDERLINE = 16,
+	FZ_STEXT_VECTOR_IS_STRIKEOUT = 32
 };
 
-enum
+enum fz_stext_grid_flags
 {
 	/* Indicates that cell contents cross the right hand edge. */
 	FZ_STEXT_GRID_H_CROSSED = 1,
@@ -417,7 +422,7 @@ enum
 };
 
 /* This structure is experimental, and subject to change. */
-typedef struct
+typedef struct fz_stext_grid_info
 {
 	/* A 2x2 table, will be represented as a 3x3 set of
 	 * cells. The rightmost column and bottommost row
@@ -451,7 +456,7 @@ struct fz_stext_block
 	fz_stext_block *prev, *next;
 };
 
-typedef enum
+typedef enum fz_stext_line_flags
 {
 	FZ_STEXT_LINE_FLAGS_JOINED = 1
 } fz_stext_line_flags;
@@ -486,7 +491,7 @@ struct fz_stext_char
 	fz_stext_char *next;
 };
 
-enum
+enum fz_stext_char_flags
 {
 	FZ_STEXT_STRIKEOUT = 1,
 	FZ_STEXT_UNDERLINE = 2,
@@ -563,21 +568,21 @@ struct fz_stext_struct
  *                                  :   :
  */
 
- typedef struct
- {
+typedef struct fz_stext_grid_divider
+{
 	int reinforcement;
 	float pos;
 	float min;
 	float max;
 	int uncertainty;
- } fz_stext_grid_divider;
+} fz_stext_grid_divider;
 
- struct fz_stext_grid_positions
- {
+struct fz_stext_grid_positions
+{
 	int len;
 	int max_uncertainty;
 	fz_stext_grid_divider list[FZ_FLEXIBLE_ARRAY];
- };
+};
 
 FZ_DATA extern const char *fz_stext_options_usage;
 
@@ -591,6 +596,7 @@ FZ_DATA extern const char *fz_stext_options_usage;
 */
 fz_stext_page *fz_new_stext_page(fz_context *ctx, fz_rect mediabox);
 void fz_drop_stext_page(fz_context *ctx, fz_stext_page *page);
+void fz_release_stext_block_run_resources(fz_context *ctx, fz_stext_block *block);
 
 /**
 	Output structured text to a file in HTML (visual) format.
@@ -615,7 +621,8 @@ void fz_print_stext_page_as_xml(fz_context *ctx, fz_output *out, fz_stext_page *
 	Output structured text to a file in XML format, with flags
 	to control how much of the structure is displayed.
 */
-typedef enum {
+typedef enum fz_stext_xml_flags
+{
 	FZ_STEXT_XML_FLAGS_CHARS = 1,
 	FZ_STEXT_XML_FLAGS_POINTERS = 2
 } fz_stext_xml_flags;
@@ -690,7 +697,7 @@ int fz_search_stext_page_cb(fz_context *ctx, fz_stext_page *text, const char *ne
 */
 int fz_highlight_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_point b, fz_quad *quads, int max_quads);
 
-enum
+enum fz_select_mode
 {
 	FZ_SELECT_CHARS,
 	FZ_SELECT_WORDS,
@@ -718,13 +725,47 @@ char *fz_copy_selection(fz_context *ctx, fz_stext_page *page, fz_point a, fz_poi
 char *fz_copy_rectangle(fz_context *ctx, fz_stext_page *page, fz_rect area, int crlf);
 
 /**
-	Options for creating structured text.
+	Options for controlling table hunt.
 */
 typedef struct
+{
+	int vertically_collapse_bordered_cells;
+} fz_table_hunt_options;
+
+enum {
+	/* Never collapse the contents of bordered cells vertically. */
+	FZ_TABLE_HUNT_VERTICAL_COLLAPSE_NO = 0,
+
+	/* Always collapse the contents of bordered cells vertically. */
+	FZ_TABLE_HUNT_VERTICAL_COLLAPSE_YES = 1
+};
+
+void fz_init_table_hunt_options(fz_context *ctx, fz_table_hunt_options *opts);
+
+/**
+	Parse table hunt options from a comma separated key-value
+	string.
+
+	This initialises the opts structure.
+*/
+fz_table_hunt_options *fz_parse_table_hunt_options(fz_context *ctx, fz_table_hunt_options *opts, const char *args);
+
+/**
+	Parse table hunt device options from an fz_options struct
+	into an already initialised opts structure.
+*/
+void fz_apply_table_hunt_options(fz_context *ctx, fz_table_hunt_options *opts, fz_options *options);
+
+
+/**
+	Options for creating structured text.
+*/
+typedef struct fz_stext_options
 {
 	int flags;
 	float scale;
 	fz_rect clip;
+	fz_table_hunt_options table_hunt_options;
 } fz_stext_options;
 
 void fz_init_stext_options(fz_context *ctx, fz_stext_options *opts);
@@ -795,13 +836,13 @@ void fz_paragraph_break(fz_context *ctx, fz_stext_page *page);
 	Hunt for possible tables on a page, and update the stext with
 	information.
 */
-void fz_table_hunt(fz_context *ctx, fz_stext_page *page);
+void fz_table_hunt(fz_context *ctx, fz_stext_page *page, const fz_table_hunt_options *opts);
 
 /**
 	Hunt for possible tables within a specific rect on a page, and
 	update the stext with information.
 */
-void fz_table_hunt_within_bounds(fz_context *ctx, fz_stext_page *page, fz_rect bounds);
+void fz_table_hunt_within_bounds(fz_context *ctx, fz_stext_page *page, fz_rect bounds, const fz_table_hunt_options *opts);
 
 /**
 	Interpret the bounded contents of a given stext page as
@@ -819,7 +860,7 @@ void fz_table_hunt_within_bounds(fz_context *ctx, fz_stext_page *page, fz_rect b
 	the table.
 */
 fz_stext_block *
-fz_find_table_within_bounds(fz_context *ctx, fz_stext_page *page, fz_rect bounds);
+fz_find_table_within_bounds(fz_context *ctx, fz_stext_page *page, fz_rect bounds, const fz_table_hunt_options *opts);
 
 /**
 	Interpret the contents of a given stext page that fall within
@@ -841,7 +882,7 @@ fz_find_table_within_bounds(fz_context *ctx, fz_stext_page *page, fz_rect bounds
 	limit.
 */
 fz_stext_block *
-fz_find_table_within_grid(fz_context *ctx, fz_stext_page *page, fz_stext_grid_positions *xpos, fz_stext_grid_positions *ypos, float limit);
+fz_find_table_within_grid(fz_context *ctx, fz_stext_page *page, fz_stext_grid_positions *xpos, fz_stext_grid_positions *ypos, float limit, const fz_table_hunt_options *opts);
 
 /**
 	Try to guess at the table structure within given bounds.
@@ -855,7 +896,7 @@ fz_find_table_within_grid(fz_context *ctx, fz_stext_page *page, fz_stext_grid_po
 	freed.
 */
 int
-fz_propose_table_within_bounds(fz_context *ctx, fz_stext_page *page, fz_rect bounds, fz_stext_grid_positions **xposp, fz_stext_grid_positions **yposp);
+fz_propose_table_within_bounds(fz_context *ctx, fz_stext_page *page, fz_rect bounds, fz_stext_grid_positions **xposp, fz_stext_grid_positions **yposp, const fz_table_hunt_options *opts);
 
 
 /**
@@ -910,6 +951,8 @@ fz_device *fz_new_stext_device(fz_context *ctx, fz_stext_page *page, const fz_st
 fz_device *
 fz_new_stext_device_for_page(fz_context *ctx, fz_stext_page *stext_page, const fz_stext_options *opts, int chapter_num, int page_num, fz_rect mediabox);
 
+/* Callback function to receive periodic progress updates from the OCR device. */
+typedef int (fz_ocr_progress_fn)(fz_context *ctx, void *arg, int progress);
 
 /**
 	Create a device to OCR the text on the page.
@@ -953,11 +996,12 @@ fz_new_stext_device_for_page(fz_context *ctx, fz_stext_page *stext_page, const f
 	progress_arg: A void * value to be parrotted back to the progress
 	function.
 */
+
 fz_device *fz_new_ocr_device(fz_context *ctx, fz_device *target, fz_matrix ctm, fz_rect mediabox, int with_list, const char *language,
-			const char *datadir, int (*progress)(fz_context *, void *, int), void *progress_arg);
+			const char *datadir, fz_ocr_progress_fn *progress, void *progress_arg);
 
 fz_device *fz_new_ocr_device_with_options(fz_context *ctx, fz_device *target, fz_matrix ctm, fz_rect mediabox, int with_list, const char *language,
-			const char *datadir, int (*progress)(fz_context *, void *, int), void *progress_arg, fz_options *options);
+			const char *datadir, fz_ocr_progress_fn *progress, void *progress_arg, fz_options *options);
 
 fz_document *fz_open_reflowed_document(fz_context *ctx, fz_document *underdoc, const fz_stext_options *opts);
 
@@ -978,7 +1022,7 @@ int fz_is_unicode_hyphen(int c);
 
 typedef struct fz_search fz_search;
 
-typedef enum
+typedef enum fz_search_options
 {
 	FZ_SEARCH_EXACT = 0,
 	FZ_SEARCH_IGNORE_CASE = 1,
@@ -1004,7 +1048,7 @@ void fz_apply_search_options(fz_context *ctx, fz_search_options *options, fz_opt
 */
 fz_search *fz_new_search(fz_context *ctx, const char *needle, fz_search_options options);
 
-typedef enum
+typedef enum fz_search_reason
 {
 	/* Ran out of stext to search. Please feed me some more. */
 	FZ_SEARCH_MORE_INPUT = 0,
@@ -1016,13 +1060,13 @@ typedef enum
 	FZ_SEARCH_COMPLETE
 } fz_search_reason;
 
-typedef struct
+typedef struct fz_search_quad
 {
 	int seq;
 	fz_quad quad;
 } fz_search_quad;
 
-typedef struct
+typedef struct fz_stext_position
 {
 	fz_stext_page *page;
 	fz_stext_struct *parent;
@@ -1031,7 +1075,7 @@ typedef struct
 	fz_stext_char *ch;
 } fz_stext_position;
 
-typedef struct
+typedef struct fz_search_match
 {
 	int num_quads;
 	fz_search_quad *quads;
@@ -1042,7 +1086,7 @@ typedef struct
 /**
 	Structure used to represent the 'result' of a search.
 */
-typedef struct
+typedef struct fz_search_result
 {
 	fz_search_reason reason;
 	union
@@ -1150,7 +1194,7 @@ fz_stext_block *fz_new_stext_struct(fz_context *ctx, fz_stext_page *page, fz_str
 /*
 	Iterator definition. The parts of this are subject to change.
 */
-typedef struct
+typedef struct fz_stext_page_block_iterator
 {
 	fz_stext_page *page;
 	fz_stext_struct *parent;
@@ -1283,7 +1327,7 @@ fz_classify_stext_rect(fz_context *ctx, fz_stext_page *page, fz_structure classi
 int
 fz_stext_remove_page_fill(fz_context *ctx, fz_stext_page *page);
 
-typedef struct
+typedef struct fz_image_raft_options
 {
 	/* The maximum width or height that should be considered for rafting. */
 	int max_size;

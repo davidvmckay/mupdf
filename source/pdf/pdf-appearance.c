@@ -34,7 +34,7 @@
 
 #include "annotation-icons.h"
 
-/* #define PDF_DEBUG_APPEARANCE_SYNTHESIS */
+//#define PDF_DEBUG_APPEARANCE_SYNTHESIS
 
 #define REPLACEMENT 0xB7
 #define CIRCLE_MAGIC 0.551915f
@@ -1620,6 +1620,14 @@ add_required_fonts(fz_context *ctx, pdf_document *doc, pdf_obj *res_font,
 		case UCDN_SCRIPT_BOPOMOFO: add_bopomofo = 1; break;
 		case UCDN_SCRIPT_HAN: add_han = 1; break;
 		}
+
+		// halfwidth and fullwidth forms
+		if (c >= 0xff01 && c <= 0xffee)
+			add_han = 1;
+
+		// cjk symbols and punctuation
+		if (c >= 0x3000 && c <= 0x303f)
+			add_han = 1;
 	}
 
 	if (add_han)
@@ -1746,6 +1754,15 @@ static int next_text_walk(fz_context *ctx, struct text_walk_state *state)
 
 	state->n = fz_chartorune(&state->u, state->text);
 	script = ucdn_get_script(state->u);
+
+	// halfwidth and fullwidth forms
+	if (state->u >= 0xff01 && state->u <= 0xffee)
+		script = UCDN_SCRIPT_HAN;
+
+	// cjk symbols and punctuation
+	if (state->u >= 0x3000 && state->u <= 0x303f)
+		script = UCDN_SCRIPT_HAN;
+
 	if (script == UCDN_SCRIPT_COMMON || script == UCDN_SCRIPT_INHERITED)
 		script = state->last_script;
 	state->last_script = script;
@@ -1938,6 +1955,8 @@ write_string_with_quadding(fz_context *ctx, fz_buffer *buf,
 				write_string(ctx, buf, lang, font, fontname, size, a, b-1);
 			else
 				write_string(ctx, buf, lang, font, fontname, size, a, b);
+			if (b[-1] == '\r' && b[0] == '\n')
+				++b;
 			a = b;
 			px = x;
 		}
@@ -2075,6 +2094,8 @@ layout_string_with_quadding(fz_context *ctx, fz_layout_block *out,
 				layout_string(ctx, out, lang, font, size, xorig+x, y, a, b);
 				add_line_at_end = 0;
 			}
+			if (b[-1] == '\r' && b[0] == '\n')
+				++b;
 			a = b;
 			y -= lineheight;
 		}
@@ -2120,7 +2141,8 @@ write_variable_text(fz_context *ctx, pdf_annot *annot, fz_buffer *buf, pdf_obj *
 				size = 12;
 			else
 			{
-				size = w / measure_string(ctx, lang, font, text);
+				float ms = measure_string(ctx, lang, font, text);
+				size = ms ? w / ms : 12;
 				if (size > h)
 					size = h;
 			}
@@ -2191,7 +2213,8 @@ layout_variable_text(fz_context *ctx, fz_layout_block *out,
 				size = 12;
 			else
 			{
-				size = w / measure_string(ctx, lang, font, text);
+				float ms = measure_string(ctx, lang, font, text);
+				size = ms ? w / ms : 12;
 				if (size > h)
 					size = h;
 			}
@@ -2273,9 +2296,8 @@ write_rich_content(fz_context *ctx, pdf_annot *annot, fz_buffer *buf, pdf_obj **
 	// this matches the math in write_variable_text.
 	if (!multiline)
 	{
-		float ty = ((h - b * 2) - size) / 2;
-		content_box.y0 = h - b - 0.8f * size + ty;
-		content_box.y1 = content_box.y0 + size * 2;
+		float gap = (h - b*2 - size) / 2;
+		content_box = fz_make_rect(b, b + gap, w - b * 2, h + gap + size * 2);
 	}
 
 	fz_try(ctx)
@@ -2383,6 +2405,14 @@ static int text_needs_rich_layout(fz_context *ctx, const char *s)
 		)
 			continue;
 
+		// halfwidth and fullwidth forms
+		if (c >= 0xff01 && c <= 0xffee)
+			continue;
+
+		// cjk symbols and punctuation
+		if (c >= 0x3000 && c <= 0x303f)
+			continue;
+
 		return 1;
 	}
 	return 0;
@@ -2464,7 +2494,7 @@ pdf_write_line_caption(fz_context *ctx, pdf_annot *annot, fz_buffer *buf, fz_rec
 		if (tw + size > line_length)
 			top = 1;
 
-		tm = fz_rotate(atan2(dy, dx) * 180 / M_PI);
+		tm = fz_rotate(atan2(dy, dx) * 180 / FZ_PI);
 		tm.e = (a.x + b.x) / 2 - dx * (tw / 2);
 		tm.f = (a.y + b.y) / 2 - dy * (tw / 2);
 
@@ -2540,6 +2570,10 @@ pdf_write_free_text_appearance(fz_context *ctx, pdf_annot *annot, fz_buffer *buf
 	pdf_annot_default_appearance(ctx, annot, &font, &size, &n, color);
 	lang = pdf_annot_language(ctx, annot);
 	rd = pdf_annot_rect_diff(ctx, annot);
+
+	/* FreeText is always multi-line so default size to 12pts if it is zero. */
+	if (size <= 0)
+		size = 12;
 
 	/* /Rotate is an undocumented annotation property supported by Adobe.
 	 * When Rotate is used, neither the box, nor the arrow move at all.
@@ -2728,6 +2762,9 @@ pdf_write_tx_widget_appearance(fz_context *ctx, pdf_annot *annot, fz_buffer *buf
 		rc = free_rc = escape_text(ctx, text);
 		if (!ds)
 		{
+			// TODO: measure accurate width to fit box if single-line!
+			if (size <= 0)
+				size = (ff & PDF_TX_FIELD_IS_MULTILINE) ? 12 : h - b*2;
 			fz_snprintf(ds_buf, sizeof ds_buf,
 				"font-family:%s;font-size:%gpt;color:#%06x;text-align:%s",
 				full_font_name(&font),

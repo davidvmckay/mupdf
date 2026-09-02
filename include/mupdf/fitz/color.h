@@ -51,7 +51,7 @@ typedef struct fz_pixmap fz_pixmap;
 
 /* Color handling parameters: rendering intent, overprint, etc. */
 
-enum
+enum fz_rendering_intent
 {
 	/* Same order as needed by lcms */
 	FZ_RI_PERCEPTUAL,
@@ -63,18 +63,18 @@ enum
 /* We abuse the top bit of the rendering intent to hold details of
  * whether we are in a softmask or not. This should not be used by
  * non-internal code. */
-enum
+enum fz_rendering_intent_abuse
 {
 	FZ_RI_IN_SOFTMASK = 0x80
 };
 
-typedef struct
+typedef struct fz_color_params
 {
 	uint8_t ri;	/* rendering intent */
 	uint8_t bp;	/* black point compensation */
 	uint8_t op;	/* overprinting */
 	uint8_t opm;	/* overprint mode */
-}  fz_color_params;
+} fz_color_params;
 
 FZ_DATA extern const fz_color_params fz_default_color_params;
 
@@ -99,14 +99,14 @@ const char *fz_rendering_intent_name(int ri);
 	(both stack and heap space), but not hugely. Speed should
 	(largely) be determined by the number of colors actually used.
 */
-enum { FZ_MAX_COLORS = 32 };
+#define FZ_MAX_COLORS 32
 
 /**
 	The maximum number of images samples allowed in any given image.
 
 	This limit is checked when allocating images.
 */
-enum { FZ_MAX_SAMPLES = 1 << 30 };
+#define FZ_MAX_SAMPLES (1 << 30)
 
 enum fz_colorspace_type
 {
@@ -120,7 +120,7 @@ enum fz_colorspace_type
 	FZ_COLORSPACE_SEPARATION,
 };
 
-enum
+enum fz_colorspace_flags
 {
 	FZ_COLORSPACE_IS_DEVICE = 1,
 	FZ_COLORSPACE_IS_ICC = 2,
@@ -335,7 +335,7 @@ void fz_convert_color(fz_context *ctx, fz_colorspace *ss, const float *sv, fz_co
 /**
 	Structure to hold default colorspaces.
 */
-typedef struct
+typedef struct fz_default_colorspaces
 {
 	int refs;
 	fz_colorspace *gray;

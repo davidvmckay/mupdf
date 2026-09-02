@@ -1,4 +1,4 @@
-// Copyright (C) 2004-2025 Artifex Software, Inc.
+// Copyright (C) 2004-2026 Artifex Software, Inc.
 //
 // This file is part of MuPDF.
 //
@@ -62,7 +62,7 @@ pdf_obj *pdf_add_stream(fz_context *ctx, pdf_document *doc, fz_buffer *buf, pdf_
 pdf_obj *pdf_add_new_dict(fz_context *ctx, pdf_document *doc, int initial);
 pdf_obj *pdf_add_new_array(fz_context *ctx, pdf_document *doc, int initial);
 
-typedef struct
+typedef struct pdf_xref_entry
 {
 	char type;		/* 0=unset (f)ree i(n)use (o)bjstm */
 	unsigned char marked;	/* marked to keep alive with pdf_mark_xref */
@@ -132,6 +132,11 @@ pdf_obj *pdf_load_unencrypted_object(fz_context *ctx, pdf_document *doc, int num
 */
 fz_buffer *pdf_load_raw_stream_number(fz_context *ctx, pdf_document *doc, int num);
 fz_buffer *pdf_load_raw_stream(fz_context *ctx, pdf_obj *ref);
+
+/*
+	Move an external stream to be an internal one.
+*/
+void pdf_internalize_external_stream(fz_context *ctx, pdf_document *doc, int num);
 
 /*
 	Load uncompressed contents of a stream into buf.
@@ -276,8 +281,8 @@ int pdf_validate_change_history(fz_context *ctx, pdf_document *doc);
 int pdf_find_version_for_obj(fz_context *ctx, pdf_document *doc, pdf_obj *obj);
 
 /*
-	Return the number of updates ago when a signature became invalid,
-	not counting any unsaved changes.
+	Return the number of updates ago when a signature field
+	became invalid, not counting any unsaved changes.
 
 	Thus:
 	 -1 => Has changed in the current unsaved changes.
@@ -285,7 +290,8 @@ int pdf_find_version_for_obj(fz_context *ctx, pdf_document *doc, pdf_obj *obj);
 	  1 => became invalid on the last save
 	  n => became invalid n saves ago
 */
-int pdf_validate_signature(fz_context *ctx, pdf_annot *widget);
+int pdf_validate_signature(fz_context *ctx, pdf_document *doc, pdf_obj *field);
+int pdf_validate_signature_widget(fz_context *ctx, pdf_annot *widget);
 int pdf_was_pure_xfa(fz_context *ctx, pdf_document *doc);
 
 /* Local xrefs - designed for holding stuff that shouldn't be written

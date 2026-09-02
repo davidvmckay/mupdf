@@ -23,15 +23,15 @@
 #ifndef SOURCE_SVG_IMP_H
 #define SOURCE_SVG_IMP_H
 
-typedef struct svg_cycle_list_s svg_cycle_list;
-struct svg_cycle_list_s {
+typedef struct svg_cycle_list svg_cycle_list;
+struct svg_cycle_list {
 	svg_cycle_list *up;
 	fz_xml *symbol;
 };
 
-typedef struct svg_document_s svg_document;
+typedef struct svg_document svg_document;
 
-struct svg_document_s
+struct svg_document
 {
 	fz_document super;
 	fz_xml_doc *xml;

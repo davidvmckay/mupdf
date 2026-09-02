@@ -17,15 +17,15 @@
 	is based on the reference implementation found on Unicode.org.
 */
 
-#ifndef FITZ_BIDI_H
-#define FITZ_BIDI_H
+#ifndef MUPDF_FITZ_BIDI_H
+#define MUPDF_FITZ_BIDI_H
 
 #include "mupdf/fitz/system.h"
 #include "mupdf/fitz/context.h"
 
 /* Implementation details: subject to change. */
 
-typedef enum
+typedef enum fz_bidi_direction
 {
 	FZ_BIDI_LTR = 0,
 	FZ_BIDI_RTL = 1,
@@ -34,7 +34,7 @@ typedef enum
 }
 fz_bidi_direction;
 
-typedef enum
+typedef enum fz_bidi_flags
 {
 	FZ_BIDI_CLASSIFY_WHITE_SPACE = 1,
 	FZ_BIDI_REPLACE_TAB = 2

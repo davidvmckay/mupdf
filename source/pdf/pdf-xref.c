@@ -28,7 +28,7 @@
 #include <limits.h>
 #include <string.h>
 
-#undef DEBUG_PROGESSIVE_ADVANCE
+//#define DEBUG_PROGESSIVE_ADVANCE
 
 #ifdef DEBUG_PROGESSIVE_ADVANCE
 #define DEBUGMESS(A) do { fz_warn A; } while (0)
@@ -1731,7 +1731,7 @@ pdf_prime_xref_index(fz_context *ctx, pdf_document *doc)
 			for (j = start; j < end; j++)
 			{
 				char t = subsec->table[j-start].type;
-				if (t != 0 && t != 'f')
+				if (t != 0)
 					idx[j] = i;
 			}
 
@@ -1915,7 +1915,7 @@ id_and_password(fz_context *ctx, pdf_document *doc)
  * If password is not null, try to decrypt.
  */
 static void
-pdf_init_document(fz_context *ctx, pdf_document *doc)
+pdf_init_document(fz_context *ctx, pdf_document *doc, fz_archive *zip)
 {
 	int repaired = 0;
 
@@ -1956,6 +1956,7 @@ pdf_init_document(fz_context *ctx, pdf_document *doc)
 		 */
 		if (!doc->file_reading_linearly)
 			pdf_load_xref(ctx, doc);
+		doc->archive = fz_keep_archive(ctx, zip);
 	}
 	fz_catch(ctx)
 	{
@@ -2037,7 +2038,7 @@ pdf_drop_document_imp(fz_context *ctx, fz_document *doc_)
 	fz_free(ctx, doc->hint_shared);
 	fz_free(ctx, doc->hint_obj_offsets);
 
-	for (i=0; i < doc->num_type3_fonts; i++)
+	for (i=0; i < doc->type3_fonts_len; i++)
 	{
 		fz_try(ctx)
 			fz_decouple_type3_font(ctx, doc->type3_fonts[i], (void *)doc);
@@ -2071,6 +2072,8 @@ pdf_drop_document_imp(fz_context *ctx, fz_document *doc_)
 	fz_defer_reap_end(ctx);
 
 	pdf_invalidate_xfa(ctx, doc);
+
+	fz_drop_archive(ctx, doc->archive);
 }
 
 void
@@ -2298,7 +2301,7 @@ pdf_obj_read(fz_context *ctx, pdf_document *doc, int64_t *offset, int *nump, pdf
 	if (tok != PDF_TOK_INT)
 	{
 		/* Failed! */
-		DEBUGMESS((ctx, "skipping unexpected data (tok=%d) at %d", tok, *offset));
+		DEBUGMESS((ctx, "skipping unexpected data (tok=%d) at %ld", tok, *offset));
 		*offset = genofs;
 		return tok == PDF_TOK_EOF;
 	}
@@ -2310,7 +2313,7 @@ pdf_obj_read(fz_context *ctx, pdf_document *doc, int64_t *offset, int *nump, pdf
 	if (tok != PDF_TOK_INT)
 	{
 		/* Failed! */
-		DEBUGMESS((ctx, "skipping unexpected data after \"%d\" (tok=%d) at %d", num, tok, *offset));
+		DEBUGMESS((ctx, "skipping unexpected data after \"%d\" (tok=%d) at %ld", num, tok, *offset));
 		*offset = tmpofs;
 		return tok == PDF_TOK_EOF;
 	}
@@ -2325,11 +2328,11 @@ pdf_obj_read(fz_context *ctx, pdf_document *doc, int64_t *offset, int *nump, pdf
 			break;
 		if (tok != PDF_TOK_INT)
 		{
-			DEBUGMESS((ctx, "skipping unexpected data (tok=%d) at %d", tok, tmpofs));
+			DEBUGMESS((ctx, "skipping unexpected data (tok=%d) at %ld", tok, tmpofs));
 			*offset = fz_tell(ctx, doc->file);
 			return tok == PDF_TOK_EOF;
 		}
-		DEBUGMESS((ctx, "skipping unexpected int %d at %d", num, numofs));
+		DEBUGMESS((ctx, "skipping unexpected int %d at %ld", num, numofs));
 		*nump = num = gen;
 		numofs = genofs;
 		gen = buf->i;
@@ -2377,7 +2380,7 @@ pdf_obj_read(fz_context *ctx, pdf_document *doc, int64_t *offset, int *nump, pdf
 		}
 		if (page && *page)
 		{
-			DEBUGMESS((ctx, "Successfully read object %d @ %d - and found page %d!", num, numofs, doc->linear_page_num));
+			DEBUGMESS((ctx, "Successfully read object %d @ %ld - and found page %d!", num, numofs, doc->linear_page_num));
 			if (!entry->obj)
 				entry->obj = pdf_keep_obj(ctx, *page);
 
@@ -2386,7 +2389,7 @@ pdf_obj_read(fz_context *ctx, pdf_document *doc, int64_t *offset, int *nump, pdf
 		}
 		else
 		{
-			DEBUGMESS((ctx, "Successfully read object %d @ %d", num, numofs));
+			DEBUGMESS((ctx, "Successfully read object %d @ %ld", num, numofs));
 		}
 		entry->type = 'n';
 		entry->gen = gen; // XXX: was 0
@@ -2473,9 +2476,9 @@ read_hinted_object(fz_context *ctx, pdf_document *doc, int num)
 		do
 		{
 			start = offset;
-			DEBUGMESS((ctx, "Searching for object %d @ %d", expected, offset));
+			DEBUGMESS((ctx, "Searching for object %d @ %ld", expected, offset));
 			pdf_obj_read(ctx, doc, &offset, &found, 0);
-			DEBUGMESS((ctx, "Found object %d - next will be @ %d", found, offset));
+			DEBUGMESS((ctx, "Found object %d - next will be @ %ld", found, offset));
 			if (found <= expected)
 			{
 				/* We found the right one (or one earlier than
@@ -3247,10 +3250,16 @@ pdf_new_document(fz_context *ctx, fz_stream *file)
 pdf_document *
 pdf_open_document_with_stream(fz_context *ctx, fz_stream *file)
 {
+	return pdf_open_document_with_stream_and_dir(ctx, file, NULL);
+}
+
+pdf_document *
+pdf_open_document_with_stream_and_dir(fz_context *ctx, fz_stream *file, fz_archive *zip)
+{
 	pdf_document *doc = pdf_new_document(ctx, file);
 	fz_try(ctx)
 	{
-		pdf_init_document(ctx, doc);
+		pdf_init_document(ctx, doc, zip);
 	}
 	fz_catch(ctx)
 	{
@@ -3265,10 +3274,16 @@ pdf_open_document_with_stream(fz_context *ctx, fz_stream *file)
 }
 
 /* Uncomment the following to test progressive loading. */
-/* #define TEST_PROGRESSIVE_HACK */
+//#define TEST_PROGRESSIVE_HACK
 
 pdf_document *
 pdf_open_document(fz_context *ctx, const char *filename)
+{
+	return pdf_open_document_with_dir(ctx, filename, NULL);
+}
+
+pdf_document *
+pdf_open_document_with_dir(fz_context *ctx, const char *filename, fz_archive *zip)
 {
 	fz_stream *file = NULL;
 	pdf_document *doc = NULL;
@@ -3278,12 +3293,15 @@ pdf_open_document(fz_context *ctx, const char *filename)
 
 	fz_try(ctx)
 	{
-		file = fz_open_file(ctx, filename);
+		if (!zip)
+			file = fz_open_file(ctx, filename);
+		else
+			file = fz_open_archive_entry(ctx, zip, filename);
 #ifdef TEST_PROGRESSIVE_HACK
 		file->progressive = 1;
 #endif
 		doc = pdf_new_document(ctx, file);
-		pdf_init_document(ctx, doc);
+		pdf_init_document(ctx, doc, zip);
 	}
 	fz_always(ctx)
 	{
@@ -3595,7 +3613,7 @@ pdf_obj *pdf_progressive_advance(fz_context *ctx, pdf_document *doc, int pagenum
 		pdf_load_hint_object(ctx, doc);
 	}
 
-	DEBUGMESS((ctx, "continuing to try to advance from %d", doc->linear_pos));
+	DEBUGMESS((ctx, "continuing to try to advance from %ld", doc->linear_pos));
 	curr_pos = fz_tell(ctx, doc->file);
 
 	fz_var(page);
@@ -3840,7 +3858,7 @@ open_document(fz_context *ctx, const fz_document_handler *handler, fz_stream *fi
 {
 	if (file == NULL)
 		return NULL;
-	return (fz_document *)pdf_open_document_with_stream(ctx, file);
+	return (fz_document *)pdf_open_document_with_stream_and_dir(ctx, file, zip);
 }
 
 fz_document_handler pdf_document_handler =
@@ -4150,9 +4168,7 @@ change_found:
 
 typedef struct
 {
-	int max;
-	int len;
-	char **list;
+	fz_list(char *, list);
 } char_list;
 
 /* This structure is used to hold the definition of which fields
@@ -4173,11 +4189,11 @@ free_char_list(fz_context *ctx, char_list *c)
 	if (c == NULL)
 		return;
 
-	for (i = c->len-1; i >= 0; i--)
+	for (i = c->list_len-1; i >= 0; i--)
 		fz_free(ctx, c->list[i]);
 	fz_free(ctx, c->list);
-	c->len = 0;
-	c->max = 0;
+	c->list_len = 0;
+	c->list_cap = 0;
 }
 
 void
@@ -4194,16 +4210,9 @@ pdf_drop_locked_fields(fz_context *ctx, pdf_locked_fields *fl)
 static void
 char_list_append(fz_context *ctx, char_list *list, const char *s)
 {
-	if (list->len == list->max)
-	{
-		int n = list->max * 2;
-		if (n == 0) n = 4;
+	const char **e = fz_push_list(ctx, list->list);
 
-		list->list = fz_realloc_array(ctx, list->list, n, char *);
-		list->max = n;
-	}
-	list->list[list->len] = fz_strdup(ctx, s);
-	list->len++;
+	*e = fz_strdup(ctx, s);
 }
 
 int
@@ -4221,14 +4230,14 @@ pdf_is_field_locked(fz_context *ctx, pdf_locked_fields *locked, const char *name
 	{
 		/* The only way we might not be unlocked is if
 		 * we are listed in the excludes. */
-		for (i = 0; i < locked->excludes.len; i++)
+		for (i = 0; i < locked->excludes.list_len; i++)
 			if (!strcmp(locked->excludes.list[i], name))
 				return 0;
 		return 1;
 	}
 
 	/* The only way we can be locked is for us to be in the includes. */
-	for (i = 0; i < locked->includes.len; i++)
+	for (i = 0; i < locked->includes.list_len; i++)
 		if (strcmp(locked->includes.list[i], name) == 0)
 			return 1;
 
@@ -4612,7 +4621,7 @@ change_found:
 			oval = pdf_dict_get(ctx, old_obj, key);
 
 			if (nval == NULL && oval != NULL)
-				changes->obj_changes[pdf_to_num(ctx, nval)] |= FIELD_CHANGE_INVALID;
+				changes->obj_changes[obj_num] |= FIELD_CHANGE_INVALID;
 		}
 		changes->obj_changes[obj_num] |= FIELD_CHANGE_VALID;
 
@@ -4687,12 +4696,12 @@ merge_lock_specification(fz_context *ctx, pdf_locked_fields *fields, pdf_obj *lo
 				{
 					const char *s = pdf_array_get_text_string(ctx, f, i);
 
-					for (r = w = 0; r < fields->excludes.len; r++)
+					for (r = w = 0; r < fields->excludes.list_len; r++)
 					{
 						if (strcmp(s, fields->excludes.list[r]))
 							fields->excludes.list[w++] = fields->excludes.list[r];
 					}
-					fields->excludes.len = w;
+					fields->excludes.list_len = w;
 				}
 			}
 			else
@@ -4703,12 +4712,12 @@ merge_lock_specification(fz_context *ctx, pdf_locked_fields *fields, pdf_obj *lo
 				{
 					const char *s = pdf_array_get_text_string(ctx, f, i);
 
-					for (r = 0; r < fields->includes.len; r++)
+					for (r = 0; r < fields->includes.list_len; r++)
 					{
 						if (!strcmp(s, fields->includes.list[r]))
 							break;
 					}
-					if (r == fields->includes.len)
+					if (r == fields->includes.list_len)
 						char_list_append(ctx, &fields->includes, s);
 				}
 			}
@@ -4719,7 +4728,7 @@ merge_lock_specification(fz_context *ctx, pdf_locked_fields *fields, pdf_obj *lo
 			{
 				/* Current state = "All except <excludes> are locked.
 				 * We need to remove anything from <excludes> that isn't in <Fields>. */
-				for (r = w = 0; r < fields->excludes.len; r++)
+				for (r = w = 0; r < fields->excludes.list_len; r++)
 				{
 					for (i = 0; i < len; i++)
 					{
@@ -4730,7 +4739,7 @@ merge_lock_specification(fz_context *ctx, pdf_locked_fields *fields, pdf_obj *lo
 					if (i != len) /* we found a match */
 						fields->excludes.list[w++] = fields->excludes.list[r];
 				}
-				fields->excludes.len = w;
+				fields->excludes.list_len = w;
 			}
 			else
 			{
@@ -4740,12 +4749,12 @@ merge_lock_specification(fz_context *ctx, pdf_locked_fields *fields, pdf_obj *lo
 				for (i = 0; i < len; i++)
 				{
 					const char *s = pdf_array_get_text_string(ctx, f, i);
-					for (r = 0; r < fields->includes.len; r++)
+					for (r = 0; r < fields->includes.list_len; r++)
 					{
 						if (!strcmp(s, fields->includes.list[r]))
 							break;
 					}
-					if (r == fields->includes.len)
+					if (r == fields->includes.list_len)
 						char_list_append(ctx, &fields->excludes, s);
 				}
 				free_char_list(ctx, &fields->includes);
@@ -4944,11 +4953,13 @@ static int
 validate_locked_fields(fz_context *ctx, pdf_document *doc, int version, pdf_locked_fields *locked)
 {
 	int o_xref_base;
-	pdf_changes *changes;
+	pdf_changes *changes = NULL;
 	int num_objs;
 	int i, n;
 	int all_indirects = 1;
 	int repaired = 0;
+
+	fz_var(changes);
 
 retry_on_repair:
 	pdf_start_throw_on_repair(ctx, doc, &o_xref_base);
@@ -5114,7 +5125,7 @@ pdf_validate_changes(fz_context *ctx, pdf_document *doc, int version)
 
 	fz_try(ctx)
 	{
-		if (!locked->all && locked->includes.len == 0 && locked->p == 0)
+		if (!locked->all && locked->includes.list_len == 0 && locked->p == 0)
 		{
 			/* If nothing is locked at all, then all changes are permissible. */
 			result = 1;
@@ -5204,21 +5215,16 @@ int pdf_find_version_for_obj(fz_context *ctx, pdf_document *doc, pdf_obj *obj)
 	return v;
 }
 
-int pdf_validate_signature(fz_context *ctx, pdf_annot *widget)
+int pdf_validate_signature(fz_context *ctx, pdf_document *doc, pdf_obj *field)
 {
-	pdf_document *doc;
 	int unsaved_versions, num_versions, version, i;
 	pdf_locked_fields *locked = NULL;
 	int o_xref_base;
 	int repaired = 0;
 
-	if (!widget->page)
-		fz_throw(ctx, FZ_ERROR_ARGUMENT, "annotation not bound to any page");
-
-	doc = widget->page->doc;
 	unsaved_versions = pdf_count_unsaved_versions(ctx, doc);
 	num_versions = pdf_count_versions(ctx, doc) + unsaved_versions;
-	version = pdf_find_version_for_obj(ctx, doc, widget->obj);
+	version = pdf_find_version_for_obj(ctx, doc, field);
 
 	if (version > num_versions-1)
 		version = num_versions-1;
@@ -5233,7 +5239,7 @@ retry_after_repair:
 
 	fz_try(ctx)
 	{
-		locked = pdf_find_locked_fields_for_sig(ctx, doc, widget->obj);
+		locked = pdf_find_locked_fields_for_sig(ctx, doc, field);
 		for (i = version-1; i >= unsaved_versions; i--)
 		{
 			doc->xref_base = i;
@@ -5264,6 +5270,14 @@ retry_after_repair:
 		pdf_maybe_throw_after_repair(ctx, doc);
 
 	return i+1-unsaved_versions;
+}
+
+int pdf_validate_signature_widget(fz_context *ctx, pdf_annot *widget)
+{
+	if (!widget->page)
+		fz_throw(ctx, FZ_ERROR_ARGUMENT, "annotation not bound to any page");
+
+	return pdf_validate_signature(ctx, widget->page->doc, widget->obj);
 }
 
 int pdf_was_pure_xfa(fz_context *ctx, pdf_document *doc)

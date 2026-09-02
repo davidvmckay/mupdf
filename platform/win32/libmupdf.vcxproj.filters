@@ -108,6 +108,9 @@
     <ClCompile Include="..\..\source\fitz\buffer.c">
       <Filter>fitz</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\source\fitz\crc32.c">
+      <Filter>fitz</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\source\fitz\color-fast.c">
       <Filter>fitz</Filter>
     </ClCompile>
@@ -744,6 +747,9 @@
     <ClCompile Include="..\..\source\pdf\pdf-struct.c">
       <Filter>pdf</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\source\fitz\list.c">
+      <Filter>fitz</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\source\fitz\draw-imp.h">
@@ -1007,7 +1013,7 @@
     <ClInclude Include="..\..\include\mupdf\fitz\heap-imp.h">
       <Filter>!include\fitz</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\include\mupdf\html.h">
+    <ClInclude Include="..\..\include\mupdf\fitz\html.h">
       <Filter>!include</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\fitz\ucdn_db.h">
@@ -1041,6 +1047,9 @@
       <Filter>pdf</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\mupdf\fitz\options.h">
+      <Filter>!include\fitz</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\mupdf\fitz\list.h">
       <Filter>!include\fitz</Filter>
     </ClInclude>
   </ItemGroup>

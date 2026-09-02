@@ -58,8 +58,14 @@ int gettimeofday(struct timeval *tv, struct timezone *tz);
 #endif
 
 /* Enable for helpful threading debug */
-/* #define DEBUG_THREADS(A) do { printf A; fflush(stdout); } while (0) */
+//#define DEBUG_THREADS
+
+#ifdef DEBUG_THREADS
+#undef DEBUG_THREADS
+#define DEBUG_THREADS(A) do { printf A; fflush(stdout); } while (0)
+#else
 #define DEBUG_THREADS(A) do { } while (0)
+#endif
 
 enum {
 	OUT_BBOX,
@@ -368,6 +374,7 @@ static int max_num_workers = 0;
 static int num_workers = 0;
 static worker_t *workers;
 static fz_band_writer *bander = NULL;
+static int external_access = 0;
 
 static const char *layer_config = NULL;
 static int layer_list = 0;
@@ -483,6 +490,7 @@ static int usage(void)
 		"\t-m -\tlimit memory usage in bytes\n"
 		"\t-L\tlow memory mode (avoid caching, clear objects after each page)\n"
 		"\t-O -\toptions\n"
+		"\t--external-access\tallow access to directory containing file for external resources\n"
 #ifndef DISABLE_MUTHREADS
 		"\t-P\tparallel interpretation/rendering\n"
 #else
@@ -2143,13 +2151,36 @@ int mudraw_main(int argc, char **argv)
 	fz_locks_context *locks = NULL;
 	size_t max_store = FZ_STORE_DEFAULT;
 	char *options_string = NULL;
+	const fz_getopt_long_options longopts[] =
+	{
+		{ "external-access", NULL, (void *)1 },
+		{ NULL, NULL, NULL }
+	};
 
 	fz_var(doc);
 
-	while ((c = fz_getopt(argc, argv, "qp:o:F:R:r:w:h:fB:c:e:G:Is:A:DiW:H:S:T:t:d:U:XLvPl:y:Yz:Z:M:NO:am:Kb:k:")) != -1)
+#define SWITCH(x) switch ((intptr_t)(x))
+#define CASE(x) case ((intptr_t)(x))
+
+	while ((c = fz_getopt_long(argc, argv, "qp:o:F:R:r:w:h:fB:c:e:G:Is:A:DiW:H:S:T:t:d:U:XLvPl:y:Yz:Z:M:NO:am:Kb:k:", longopts)) != -1)
 	{
 		switch (c)
 		{
+		case 0:
+		{
+			SWITCH(fz_optlong->opaque)
+			{
+			// Any future long options go here.
+			default:
+			case 0:
+				assert(!"Never happens");
+				break;
+			case 1:
+				external_access = 1;
+				break;
+			}
+			break;
+		}
 		default: return usage();
 
 		case 'q': quiet = 1; break;
@@ -2651,11 +2682,21 @@ int mudraw_main(int argc, char **argv)
 				time_t atime;
 				time_t dtime;
 				int layouttime;
+				fz_archive *dir = NULL;
+
+				fz_var(dir);
 
 				fz_try(ctx)
 				{
 					filename = argv[fz_optind++];
 					files++;
+
+					if (external_access)
+					{
+						char dirname[PATH_MAX];
+						fz_dirname(dirname, filename, sizeof dirname);
+						dir = fz_open_directory(ctx, dirname);
+					}
 
 					if (!useaccel)
 						accel = NULL;
@@ -2684,7 +2725,7 @@ int mudraw_main(int argc, char **argv)
 						}
 					}
 
-					doc = fz_open_accelerated_document(ctx, filename, accel);
+					doc = fz_open_accelerated_document_with_dir(ctx, filename, accel, dir);
 
 #ifdef CLUSTER
 					/* Load and then drop the outline if we're running under the cluster.
@@ -2774,6 +2815,7 @@ int mudraw_main(int argc, char **argv)
 				{
 					fz_drop_document(ctx, doc);
 					doc = NULL;
+					fz_drop_archive(ctx, dir);
 				}
 				fz_catch(ctx)
 				{
@@ -2789,7 +2831,6 @@ int mudraw_main(int argc, char **argv)
 		fz_catch(ctx)
 		{
 			bgprint_flush();
-			fz_drop_document(ctx, doc);
 			fz_report_error(ctx);
 			fz_log_error_printf(ctx, "cannot draw '%s'", filename);
 			errored = 1;

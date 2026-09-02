@@ -24,7 +24,6 @@
 #define MUPDF_FITZ_DOCUMENT_H
 
 #include "mupdf/fitz/system.h"
-#include "mupdf/fitz/types.h"
 #include "mupdf/fitz/context.h"
 #include "mupdf/fitz/geometry.h"
 #include "mupdf/fitz/device.h"
@@ -34,11 +33,12 @@
 #include "mupdf/fitz/separation.h"
 #include "mupdf/fitz/archive.h"
 
+typedef struct fz_document fz_document;
 typedef struct fz_document_handler fz_document_handler;
 typedef struct fz_page fz_page;
 typedef intptr_t fz_bookmark;
 
-typedef enum
+typedef enum fz_box_type
 {
 	FZ_MEDIA_BOX,
 	FZ_CROP_BOX,
@@ -51,16 +51,7 @@ typedef enum
 fz_box_type fz_box_type_from_string(const char *name);
 const char *fz_string_from_box_type(fz_box_type box);
 
-/**
-	Simple constructor for fz_locations.
-*/
-static inline fz_location fz_make_location(int chapter, int page)
-{
-	fz_location loc = { chapter, page };
-	return loc;
-}
-
-enum
+enum fz_layout_const
 {
 	/* 6in at 4:3 */
 	FZ_LAYOUT_KINDLE_W = 260,
@@ -103,20 +94,20 @@ enum
 	FZ_DEFAULT_LAYOUT_EM = FZ_LAYOUT_A5_EM,
 };
 
-enum
+enum fz_layout_style_const
 {
 	FZ_STYLE_NEEDS_DEFAULT = -1,
 	FZ_STYLE_NEEDS_UPDATE = 0,
 	FZ_STYLE_APPLIED = 1,
 };
 
-enum
+enum fz_layout_update_const
 {
 	FZ_LAYOUT_NEEDS_UPDATE = 0,
 	FZ_LAYOUT_APPLIED = 1,
 };
 
-typedef enum
+typedef enum fz_permission
 {
 	FZ_PERMISSION_PRINT = 'p',
 	FZ_PERMISSION_COPY = 'c',
@@ -512,6 +503,14 @@ fz_document *fz_open_document(fz_context *ctx, const char *filename);
 	filename: a path to a file as it would be given to open(2).
 */
 fz_document *fz_open_accelerated_document(fz_context *ctx, const char *filename, const char *accel);
+
+/**
+	Like fz_open_accelerated_document, but also takes an
+	archive in which external resources may be looked for.
+
+	A reference will be taken to the archive.
+*/
+fz_document *fz_open_accelerated_document_with_dir(fz_context *ctx, const char *filename, const char *accel, fz_archive *dir);
 
 /**
 	Open a document using the specified stream object rather than

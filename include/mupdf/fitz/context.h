@@ -1,4 +1,4 @@
-// Copyright (C) 2004-2025 Artifex Software, Inc.
+// Copyright (C) 2004-2026 Artifex Software, Inc.
 //
 // This file is part of MuPDF.
 //
@@ -27,11 +27,6 @@
 #include "mupdf/fitz/system.h"
 #include "mupdf/fitz/geometry.h"
 
-
-#ifndef FZ_VERBOSE_EXCEPTIONS
-#define FZ_VERBOSE_EXCEPTIONS 0
-#endif
-
 typedef struct fz_font_context fz_font_context;
 typedef struct fz_hyph_context fz_hyph_context;
 typedef struct fz_colorspace_context fz_colorspace_context;
@@ -42,12 +37,13 @@ typedef struct fz_glyph_cache fz_glyph_cache;
 typedef struct fz_document_handler_context fz_document_handler_context;
 typedef struct fz_archive_handler_context fz_archive_handler_context;
 typedef struct fz_output fz_output;
+typedef struct fz_document fz_document;
 typedef struct fz_context fz_context;
 
 /**
 	Allocator structure; holds callbacks and private data pointer.
 */
-typedef struct
+typedef struct fz_alloc_context
 {
 	void *user;
 	void *(*malloc)(void *, size_t);
@@ -169,38 +165,6 @@ void fz_vlog_error_printf(fz_context *ctx, const char *fmt, va_list ap);
 */
 void fz_log_error(fz_context *ctx, const char *str);
 
-/**
-	Now, a debugging feature. If FZ_VERBOSE_EXCEPTIONS is 1 then
-	some of the above functions are replaced by versions that print
-	FILE and LINE information.
-*/
-#if FZ_VERBOSE_EXCEPTIONS
-#define fz_vthrow(CTX, ERRCODE, FMT, VA) fz_vthrowFL(CTX, __FILE__, __LINE__, ERRCODE, FMT, VA)
-#define fz_throw(CTX, ERRCODE, ...) fz_throwFL(CTX, __FILE__, __LINE__, ERRCODE, __VA_ARGS__)
-#define fz_rethrow(CTX) fz_rethrowFL(CTX, __FILE__, __LINE__)
-#define fz_morph_error(CTX, FROM, TO) fz_morph_errorFL(CTX, __FILE__, __LINE__, FROM, TO)
-#define fz_vwarn(CTX, FMT, VA) fz_vwarnFL(CTX, __FILE__, __LINE__, FMT, VA)
-#define fz_warn(CTX, ...) fz_warnFL(CTX, __FILE__, __LINE__, __VA_ARGS__)
-#define fz_rethrow_if(CTX, ERRCODE) fz_rethrow_ifFL(CTX, __FILE__, __LINE__, ERRCODE)
-#define fz_rethrow_unless(CTX, ERRCODE) fz_rethrow_unlessFL(CTX, __FILE__, __LINE__, ERRCODE)
-#define fz_log_error_printf(CTX, ...) fz_log_error_printfFL(CTX, __FILE__, __LINE__, __VA_ARGS__)
-#define fz_vlog_error_printf(CTX, FMT, VA) fz_log_error_printfFL(CTX, __FILE__, __LINE__, FMT, VA)
-#define fz_log_error(CTX, STR) fz_log_error_printfFL(CTX, __FILE__, __LINE__, STR)
-#define fz_do_catch(CTX) fz_do_catchFL(CTX, __FILE__, __LINE__)
-FZ_NORETURN void fz_vthrowFL(fz_context *ctx, const char *file, int line, int errcode, const char *fmt, va_list ap);
-FZ_NORETURN void fz_throwFL(fz_context *ctx, const char *file, int line, int errcode, const char *fmt, ...) FZ_PRINTFLIKE(5,6);
-FZ_NORETURN void fz_rethrowFL(fz_context *ctx, const char *file, int line);
-void fz_morph_errorFL(fz_context *ctx, const char *file, int line, int fromcode, int tocode);
-void fz_vwarnFL(fz_context *ctx, const char *file, int line, const char *fmt, va_list ap);
-void fz_warnFL(fz_context *ctx, const char *file, int line, const char *fmt, ...) FZ_PRINTFLIKE(4,5);
-void fz_rethrow_ifFL(fz_context *ctx, const char *file, int line, int errcode);
-void fz_rethrow_unlessFL(fz_context *ctx, const char *file, int line, int errcode);
-void fz_log_error_printfFL(fz_context *ctx, const char *file, int line, const char *fmt, ...) FZ_PRINTFLIKE(4,5);
-void fz_vlog_error_printfFL(fz_context *ctx, const char *file, int line, const char *fmt, va_list ap);
-void fz_log_errorFL(fz_context *ctx, const char *file, int line, const char *str);
-int fz_do_catchFL(fz_context *ctx, const char *file, int line);
-#endif
-
 /* Report an error to the registered error callback. */
 void fz_report_error(fz_context *ctx);
 
@@ -266,14 +230,14 @@ void fz_flush_warnings(fz_context *ctx);
 	enabled by defining FITZ_DEBUG_LOCKING.
 */
 
-typedef struct
+typedef struct fz_locks_context
 {
 	void *user;
 	void (*lock)(void *user, int lock);
 	void (*unlock)(void *user, int lock);
 } fz_locks_context;
 
-enum {
+enum fz_lock_id {
 	FZ_LOCK_ALLOC = 0,
 	FZ_LOCK_FREETYPE,
 	FZ_LOCK_GLYPHCACHE,
@@ -281,7 +245,9 @@ enum {
 };
 
 #if defined(MEMENTO) || !defined(NDEBUG)
+#ifndef FITZ_DEBUG_LOCKING
 #define FITZ_DEBUG_LOCKING
+#endif
 #endif
 
 #ifdef FITZ_DEBUG_LOCKING
@@ -309,10 +275,8 @@ void fz_lock_debug_unlock(fz_context *ctx, int lock);
 	FZ_STORE_DEFAULT: A reasonable upper bound on the size, for
 	devices that are not memory constrained.
 */
-enum {
-	FZ_STORE_UNLIMITED = 0,
-	FZ_STORE_DEFAULT = 256 << 20,
-};
+#define FZ_STORE_UNLIMITED 0
+#define FZ_STORE_DEFAULT (256 << 20)
 
 /**
 	Allocate context containing global state.
@@ -519,7 +483,8 @@ void fz_tune_image_scale(fz_context *ctx, fz_tune_image_scale_fn *image_scale, v
 /**
 	Set the behavior for image rendering and resampling.
 */
-enum {
+enum fz_image_rendering_behavior
+{
 	// We may box filter images down by a power of 2, before scaling
 	// accurately to get the final results. Rendering will be stable.
 	// This may be faster and may use less memory than 'QUALITY'
@@ -788,7 +753,7 @@ void fz_memrnd(fz_context *ctx, uint8_t *block, int len);
 /*
 	Reference counted malloced C strings.
 */
-typedef struct
+typedef struct fz_string
 {
 	int refs;
 	char str[FZ_FLEXIBLE_ARRAY];
@@ -828,14 +793,14 @@ int (fz_do_catch)(fz_context *ctx);
 #define FZ_JMPBUF_ALIGN 32
 #endif
 
-typedef struct
+typedef struct fz_error_stack_slot
 {
 	fz_jmp_buf buffer;
 	int state, code;
 	char padding[FZ_JMPBUF_ALIGN-sizeof(int)*2];
 } fz_error_stack_slot;
 
-typedef struct
+typedef struct fz_error_context
 {
 	fz_error_stack_slot *top;
 	fz_error_stack_slot stack[256];
@@ -848,7 +813,7 @@ typedef struct
 	char message[256];
 } fz_error_context;
 
-typedef struct
+typedef struct fz_warn_context
 {
 	void *print_user;
 	void (*print)(void *user, const char *message);
@@ -856,7 +821,7 @@ typedef struct
 	char message[256];
 } fz_warn_context;
 
-typedef struct
+typedef struct fz_aa_context
 {
 	int hscale;
 	int vscale;
@@ -866,7 +831,7 @@ typedef struct
 	float min_line_width;
 } fz_aa_context;
 
-typedef enum
+typedef enum fz_activity_reason
 {
 	FZ_ACTIVITY_NEW_DOC = 0,
 	FZ_ACTIVITY_SHUTDOWN = 1
@@ -874,7 +839,7 @@ typedef enum
 
 typedef void (fz_activity_fn)(fz_context *ctx, void *opaque, fz_activity_reason reason, void *reason_arg);
 
-typedef struct
+typedef struct fz_activity_context
 {
 	void *opaque;
 	fz_activity_fn *activity;

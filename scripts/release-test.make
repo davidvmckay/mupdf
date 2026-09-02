@@ -36,11 +36,15 @@ run-release-test:
 	$(MAKE) nuke
 	$(MAKE) -f scripts/release-test.make test-memento-build
 	$(MAKE) nuke
+	$(MAKE) -f scripts/release-test.make make-all-debug
+	$(MAKE) nuke
 	$(MAKE) -f scripts/release-test.make make-one-disabled-config
 	$(MAKE) nuke
 	$(MAKE) -f scripts/release-test.make make-one-enabled-config
 	$(MAKE) nuke
 	$(MAKE) -f scripts/release-test.make make-all-disabled-defines
+	$(MAKE) nuke
+	$(MAKE) -f scripts/release-test.make make-all-disabled-defines-but-keep-js
 	$(MAKE) nuke
 	$(MAKE) -f scripts/release-test.make make-all-disabled-config
 	$(MAKE) nuke
@@ -132,8 +136,70 @@ make-memento-build:
 test-memento-build: make-memento-build pdfref17.pdf
 	./build/memento/mutool draw -st pdfref17.pdf N-1
 
+make-all-debug:
+	$(MAKE) -j2 XCFLAGS=" \
+		-DBMP_DEBUG \
+		-DCHECK_SPLAY \
+		-DDEBUG_ALLOCS \
+		-DDEBUG_BIDI_OUTLINE \
+		-DDEBUG_BIDI_VERBOSE \
+		-DDEBUG_CSS_SPLAY \
+		-DDEBUG_DESKEWER \
+		-DDEBUG_DESPERATE_SPLITTING \
+		-DDEBUG_DIRENTRIES \
+		-DDEBUG_HARFBUZZ \
+		-DDEBUG_HEAP_SORT \
+		-DDEBUG_HTML_SEQ \
+		-DDEBUG_LAYOUT_RESTARTING \
+		-DDEBUG_MARK_AND_SWEEP \
+		-DDEBUG_OCR \
+		-DDEBUG_OFFICE_TO_HTML \
+		-DDEBUG_PARA_SPLITS \
+		-DDEBUG_PRINT_WORKING \
+		-DDEBUG_PROGESSIVE_ADVANCE \
+		-DDEBUG_RAFT \
+		-DDEBUG_SCAN_CONVERTER \
+		-DDEBUG_SCAVENGING \
+		-DDEBUG_SPLITS \
+		-DDEBUG_STRUCT \
+		-DDEBUG_STRUCTURE \
+		-DDEBUG_SUBSETTING \
+		-DDEBUG_TABLE_HUNT \
+		-DDEBUG_TABLE_SCORES \
+		-DDEBUG_TABLE_SPLITS \
+		-DDEBUG_TABLE_STRUCTURE \
+		-DDEBUG_THREADS \
+		-DDEBUG_WRITE_AS_PS \
+		-DDEBUG_WRITING \
+		-DDETECT_DOCUMENT_RGB \
+		-DDO_HISTEQ \
+		-DDUMP_GROUP_BLENDS \
+		-DDUMP_LEXER_STREAM \
+		-DDUMP_SPLAY \
+		-DDUMP_STACK_CHANGES \
+		-DENABLE_STORE_LOGGING \
+		-DFITZ_DEBUG_LOCKING \
+		-DFITZ_DEBUG_LOCKING_TIMES \
+		-DFZ_XML_SEQ \
+		-DJBIG2_DEBUG \
+		-DPDF_DEBUG_APPEARANCE_SYNTHESIS \
+		-DPDF_DEBUG_JOURNAL \
+		-DSLOW_INTERPOLATION \
+		-DSLOW_WARPING \
+		-DTEST_BUFFER_WRITE \
+		-DTEST_PROGRESSIVE_HACK \
+		-DTEST_PROGRESSIVE_LOADING \
+		-DTRACK_USAGE \
+		-DTIMINGS \
+		-DWARP_DEBUG \
+		-DWARP_SPEW_DEBUG \
+	" build=debug
+
 make-all-disabled-defines:
 	$(MAKE) -j2 XCFLAGS='-DFZ_ENABLE_CBZ=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_EPUB=0 -DFZ_ENABLE_FB2=0 -DFZ_ENABLE_HTML=0 -DFZ_ENABLE_MD=0 -DFZ_ENABLE_HTML_ENGINE=0 -DFZ_ENABLE_ICC=0 -DFZ_ENABLE_IMG=0 -DFZ_ENABLE_JPX=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_MOBI=0 -DFZ_ENABLE_OCR_OUTPUT=0 -DFZ_ENABLE_ODT_OUTPUT=0 -DFZ_ENABLE_OFFICE=0 -DFZ_ENABLE_PDF=0 -DFZ_ENABLE_SPOT_RENDERING=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_TXT=0 -DFZ_ENABLE_XPS=0 -DFZ_ENABLE_BROTLI=0' build=release
+
+make-all-disabled-defines-but-keep-js:
+	$(MAKE) -j2 XCFLAGS='-DFZ_ENABLE_CBZ=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_EPUB=0 -DFZ_ENABLE_FB2=0 -DFZ_ENABLE_HTML=0 -DFZ_ENABLE_MD=0 -DFZ_ENABLE_HTML_ENGINE=0 -DFZ_ENABLE_ICC=0 -DFZ_ENABLE_IMG=0 -DFZ_ENABLE_JPX=0 -DFZ_ENABLE_MOBI=0 -DFZ_ENABLE_OCR_OUTPUT=0 -DFZ_ENABLE_ODT_OUTPUT=0 -DFZ_ENABLE_OFFICE=0 -DFZ_ENABLE_PDF=0 -DFZ_ENABLE_SPOT_RENDERING=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_TXT=0 -DFZ_ENABLE_XPS=0 -DFZ_ENABLE_BROTLI=0' build=debug
 
 make-all-disabled-config:
 	$(MAKE) -j2 build=release brotli=no mujs=no html=no xps=no svg=no extract=no tesseract=no barcode=no archive=no tofu=no tofu_cjk=no tofu_cjk_ext=no tofu_cjk_lang=no

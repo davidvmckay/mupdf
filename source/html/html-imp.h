@@ -24,31 +24,30 @@
 #define SOURCE_HTML_IMP_H
 
 #include "mupdf/fitz.h"
-#include "mupdf/html.h"
 
 #include "../fitz/xml-imp.h"
 
-typedef struct fz_html_font_face_s fz_html_font_face;
-typedef struct fz_html_box_s fz_html_box;
-typedef struct fz_html_flow_s fz_html_flow;
-typedef struct fz_css_style_splay_s fz_css_style_splay;
+typedef struct fz_html_font_face fz_html_font_face;
+typedef struct fz_html_box fz_html_box;
+typedef struct fz_html_flow fz_html_flow;
+typedef struct fz_css_style_splay fz_css_style_splay;
 
-typedef struct fz_css_s fz_css;
-typedef struct fz_css_rule_s fz_css_rule;
-typedef struct fz_css_match_s fz_css_match;
-typedef struct fz_css_style_s fz_css_style;
+typedef struct fz_css fz_css;
+typedef struct fz_css_rule fz_css_rule;
+typedef struct fz_css_match fz_css_match;
+typedef struct fz_css_style fz_css_style;
 
-typedef struct fz_css_selector_s fz_css_selector;
-typedef struct fz_css_condition_s fz_css_condition;
-typedef struct fz_css_property_s fz_css_property;
-typedef struct fz_css_value_s fz_css_value;
-typedef struct fz_css_number_s fz_css_number;
-typedef struct fz_css_color_s fz_css_color;
+typedef struct fz_css_selector fz_css_selector;
+typedef struct fz_css_condition fz_css_condition;
+typedef struct fz_css_property fz_css_property;
+typedef struct fz_css_value fz_css_value;
+typedef struct fz_css_number fz_css_number;
+typedef struct fz_css_color fz_css_color;
 
 /* Enable the following to get sequence numbers in the html boxes to aid debugging. */
 //#define DEBUG_HTML_SEQ
 
-struct fz_html_font_face_s
+struct fz_html_font_face
 {
 	char *family;
 	int is_bold;
@@ -59,7 +58,7 @@ struct fz_html_font_face_s
 	fz_html_font_face *next;
 };
 
-struct fz_html_font_set_s
+struct fz_html_font_set
 {
 	fz_font *fonts[12]; /* Times, Helvetica, Courier in R,I,B,BI */
 	fz_html_font_face *custom;
@@ -78,13 +77,13 @@ enum
 	CSS_URI,
 };
 
-struct fz_css_s
+struct fz_css
 {
 	fz_pool *pool;
 	fz_css_rule *rule;
 };
 
-struct fz_css_rule_s
+struct fz_css_rule
 {
 	fz_css_selector *selector;
 	fz_css_property *declaration;
@@ -92,7 +91,7 @@ struct fz_css_rule_s
 	int loaded;
 };
 
-struct fz_css_selector_s
+struct fz_css_selector
 {
 	char *name;
 	int combine;
@@ -102,7 +101,7 @@ struct fz_css_selector_s
 	fz_css_selector *next;
 };
 
-struct fz_css_condition_s
+struct fz_css_condition
 {
 	int type;
 	char *key;
@@ -110,7 +109,7 @@ struct fz_css_condition_s
 	fz_css_condition *next;
 };
 
-struct fz_css_property_s
+struct fz_css_property
 {
 	int name;
 	fz_css_value *value;
@@ -119,7 +118,7 @@ struct fz_css_property_s
 	fz_css_property *next;
 };
 
-struct fz_css_value_s
+struct fz_css_value
 {
 	int type;
 	char *data;
@@ -217,7 +216,7 @@ enum
 	PRO_PADDING,
 };
 
-struct fz_css_match_s
+struct fz_css_match
 {
 	fz_css_match *up;
 	short spec[NUM_PROPERTIES];
@@ -270,18 +269,18 @@ enum {
 	FZ_CSS_PSEUDO_AFTER,
 };
 
-struct fz_css_number_s
+struct fz_css_number
 {
 	float value;
 	int unit;
 };
 
-struct fz_css_color_s
+struct fz_css_color
 {
 	unsigned char r, g, b, a;
 };
 
-struct fz_css_style_s
+struct fz_css_style
 {
 	fz_font *font;
 	fz_css_number font_size;
@@ -324,7 +323,7 @@ struct fz_css_style_s
 	unsigned int hyphens : 2;
 };
 
-struct fz_css_style_splay_s {
+struct fz_css_style_splay {
 	fz_css_style style;
 	fz_css_style_splay *lt;
 	fz_css_style_splay *gt;
@@ -348,7 +347,14 @@ typedef struct
 	fz_html_box *root;
 } fz_html_tree;
 
-struct fz_html_s
+typedef struct
+{
+	char *title;
+	char *author;
+	char *subject;
+} fz_html_metadata;
+
+struct fz_html
 {
 	/* fz_html is derived from fz_html_tree, so must start with that. */
 	/* Arguably 'tree' should be called 'super'. */
@@ -358,7 +364,7 @@ struct fz_html_s
 	float meta_w, meta_h;
 	float layout_w, layout_h, layout_em;
 	float page_margin[4];
-	char *title;
+	fz_html_metadata metadata;
 };
 
 typedef enum
@@ -469,7 +475,7 @@ struct fz_story
 	fz_archive *zip;
 };
 
-struct fz_html_box_s
+struct fz_html_box
 {
 	unsigned int type : 3;
 	unsigned int is_first_flow : 1; /* for text-indent */
@@ -478,6 +484,9 @@ struct fz_html_box_s
 	unsigned int list_item : 16;
 	unsigned int suppress_border: 4;
 	unsigned int collapsed_cell : 1;
+
+	// to indicate when an inline formatting context has been finished (when interrupted by a block level block)
+	unsigned int stop : 1;
 
 	fz_html_box *up, *down, *next;
 
@@ -533,7 +542,7 @@ enum
 	FLOW_ANCHOR = 6
 };
 
-struct fz_html_flow_s
+struct fz_html_flow
 {
 	/* What type of node */
 	unsigned int type : 3;

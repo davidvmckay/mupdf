@@ -316,21 +316,6 @@ static const struct {
 	{"yellowgreen", {154,205,50,255}},
 };
 
-static inline int fz_tolower_ascii(int c)
-{
-	if ((unsigned int)c - 'A' < 26)
-		return c | 32;
-	return c;
-}
-
-static int fz_strcasecmp_ascii(const char *a, const char *b)
-{
-	const unsigned char *l = (void *)a, *r = (void *)b;
-	while (*l && *r && (*l == *r || fz_tolower_ascii(*l) == fz_tolower_ascii(*r)))
-		l++, r++;
-	return fz_tolower_ascii(*l) - fz_tolower_ascii(*r);
-}
-
 static const fz_css_color *
 lookup_named_color(const char *name)
 {
@@ -2076,7 +2061,7 @@ fz_css_colstyle(col_style *cs, fz_css_match *match)
 static void
 do_verify_splay(const fz_css_style_splay *x)
 {
-	printf("%x<", x);
+	printf("%llx<", (unsigned long long int) x);
 	if (x->lt)
 	{
 		assert(memcmp(&x->lt->style, &x->style, sizeof(x->style)) < 0);

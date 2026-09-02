@@ -1,4 +1,4 @@
-// Copyright (C) 2004-2025 Artifex Software, Inc.
+// Copyright (C) 2004-2026 Artifex Software, Inc.
 //
 // This file is part of MuPDF.
 //
@@ -27,24 +27,24 @@
 #include <string.h>
 
 /* Define TIMINGS to get timing information dumped to stdout. */
-#undef TIMINGS
+//#define TIMINGS
 
 /* Define WARP_DEBUG to get debugging output (and PNGs saved). Note
  * that this will affect timings! */
-#undef WARP_DEBUG
+//#define WARP_DEBUG
 
 /* Define WARP_SPEW_DEBUG to get even more debug output (and PNGs). */
-#undef WARP_SPEW_DEBUG
+//#define WARP_SPEW_DEBUG
 
 /* One reference suggested doing histogram equalisation. */
-#define DO_HISTEQ
+//#define DO_HISTEQ
 
 /* Define DETECT_DOCUMENT_RGB, and edge detection on RGB documents will
  * look for edges in just the R,G,B planes as well as the grey plane. */
-#undef DETECT_DOCUMENT_RGB
+//#define DETECT_DOCUMENT_RGB
 
-#undef SLOW_INTERPOLATION
-#undef SLOW_WARPING
+//#define SLOW_INTERPOLATION
+//#define SLOW_WARPING
 
 #ifdef WARP_DEBUG
 static void
@@ -279,6 +279,7 @@ interp_n(unsigned char *d, const unsigned char *s0,
 	while (--n);
 }
 
+#ifndef SLOW_INTERPOLATION
 static void
 interp2_n(unsigned char *d, const unsigned char *s0,
 	const unsigned char *s1, const unsigned char *s2,
@@ -295,6 +296,7 @@ interp2_n(unsigned char *d, const unsigned char *s0,
 	}
 	while (--n);
 }
+#endif
 
 static inline void
 copy_pixel(unsigned char *d, const fz_pixmap *src, fz_ipoint p)
@@ -329,12 +331,12 @@ copy_pixel(unsigned char *d, const fz_pixmap *src, fz_ipoint p)
 			int v1 = s[n];
 			int v2 = s[stride];
 			int v3 = s[stride+n];
-			int v01, v23, v;
+			int v01, v23, vv;
 			v01 = (v0<<8) + (v1-v0)*fu;
 			v23 = (v2<<8) + (v3-v2)*fu;
-			v   = (v01<<8) + (v23-v01)*fv;
-			assert(v >= 0 && v < (1<<24)-32768);
-			*d++ = (v + 32768)>>16;
+			vv  = (v01<<8) + (v23-v01)*fv;
+			assert(vv >= 0 && v < (1<<24)-32768);
+			*d++ = (vv + 32768)>>16;
 			s++;
 		}
 		return;
@@ -388,6 +390,7 @@ warp_core(unsigned char *d, int n, int width, int height, int stride,
 #ifdef SLOW_WARPING
 	{
 		int h;
+		(void) row_bres;
 		for (h = 0 ; h < height ; h++)
 		{
 			int sx = corner[0].x + (corner[3].x - corner[0].x)*h/height;
@@ -1875,7 +1878,7 @@ make_hough(fz_context *ctx, const fz_pixmap *src, fz_quad *corners)
 		int i;
 		for (i = 0; i < 270; i++)
 		{
-			float theta = i*M_PI/180;
+			float theta = i*FZ_PI/180;
 			sintable[i] = (int16_t)((1<<SINTABLE_SHIFT)*sinf(theta) + 0.5f);
 		}
 	}
@@ -2029,7 +2032,7 @@ make_hough(fz_context *ctx, const fz_pixmap *src, fz_quad *corners)
 #ifdef WARP_DEBUG
 	/* Mark up the src (again, for debugging) */
 	{
-		fz_device *dev = fz_new_draw_device(ctx, fz_identity, src);
+		fz_device *dev = fz_new_draw_device(ctx, fz_identity, (fz_pixmap *) src);
 		fz_stroke_state *stroke = fz_new_stroke_state(ctx);
 		float col = 1;
 		fz_color_params params = { FZ_RI_PERCEPTUAL };
@@ -2044,7 +2047,7 @@ make_hough(fz_context *ctx, const fz_pixmap *src, fz_quad *corners)
 			fz_drop_path(ctx, path);
 			debug_printf(ctx, "%d %d -> %d %d\n", edge[x].x0, edge[x].y0, edge[x].x1, edge[x].y1);
 			sprintf(text, "line%d.png", x);
-			fz_save_pixmap_as_png(ctx, src, text);
+			fz_save_pixmap_as_png(ctx, (fz_pixmap *) src, text);
 		}
 #endif
 
@@ -2227,9 +2230,9 @@ fz_detect_document(fz_context *ctx, fz_quad *points, fz_pixmap *orig_src)
 			histeq(g);
 			histeq(b);
 #endif
-			grad(ctx, r);
-			grad(ctx, g);
-			grad(ctx, b);
+			grad(ctx, r, pregrad(ctx, r));
+			grad(ctx, g, pregrad(ctx, g));
+			grad(ctx, b, pregrad(ctx, b));
 #ifdef WARP_DEBUG
 			fz_save_pixmap_as_png(ctx, r, "r.png");
 			fz_save_pixmap_as_png(ctx, g, "g.png");
@@ -2298,15 +2301,15 @@ fz_detect_document(fz_context *ctx, fz_quad *points, fz_pixmap *orig_src)
 	if (found && points)
 	{
 		float f = (1<<l2factor);
-		float r = f/2;
-		points->ul.x = points->ul.x *f + r;
-		points->ul.y = points->ul.y *f + r;
-		points->ur.x = points->ur.x *f + r;
-		points->ur.y = points->ur.y *f + r;
-		points->ll.x = points->ll.x *f + r;
-		points->ll.y = points->ll.y *f + r;
-		points->lr.x = points->lr.x *f + r;
-		points->lr.y = points->lr.y *f + r;
+		float rr = f/2;
+		points->ul.x = points->ul.x *f + rr;
+		points->ul.y = points->ul.y *f + rr;
+		points->ur.x = points->ur.x *f + rr;
+		points->ur.y = points->ur.y *f + rr;
+		points->ll.x = points->ll.x *f + rr;
+		points->ll.y = points->ll.y *f + rr;
+		points->lr.x = points->lr.x *f + rr;
+		points->lr.y = points->lr.y *f + rr;
 	}
 
 	return found;
